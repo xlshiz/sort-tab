@@ -56,6 +56,8 @@
 ;; No need more.
 ;;
 
+(require 'cl-lib)
+
 (defgroup sort-tab nil
   "Display sort-tab in top of Emacs."
   :group 'convenience)
@@ -81,9 +83,25 @@
   :type '(choice (const :tag "Left" left)
                  (const :tag "Center" center)))
 
-(defcustom sort-tab-show-index-number nil
-  "Show index number before tab name."
-  :type 'boolean)
+(defcustom sort-tab-ace-keys '(?a ?s ?d ?f ?g)
+  "Key used for ace tab."
+  :group 'sort-tab
+  :set #'(lambda (symbol value)
+           (set-default symbol value)
+           (let ((1k-seqs nil)
+                 (2k-seqs nil))
+             (dolist (a value)
+               (dolist (b value)
+                 (push (list a b) 2k-seqs))
+               (push (list a) 1k-seqs))
+             (setq sort-tab-ace-2-key-seqs (nreverse 2k-seqs))
+             (setq sort-tab-ace-1-key-seqs (nreverse 1k-seqs))))
+  :type '(repeat :tag "Keys" character))
+
+(defcustom sort-tab-ace-quit-keys '(?\C-g ?q ?\s)
+  "Key used for ace tab."
+  :group 'sort-tab
+  :type '(repeat :tag "Keys" character))
 
 (defface sort-tab-current-tab-face
   '((((background light))
@@ -122,12 +140,26 @@
 (defvar-local sort-tab-buffer-freq 0
   "Used frequency of current buffer.")
 
+(defvar sort-tab-ace-state nil
+  "Whether current buffer is doing ace or not.")
+
 (defvar sort-tab-count-freq-idle-time 1
   "Add used frequency after being idle for this much secs.")
 
 (defvar sort-tab-visible-buffers nil)
 
 (defvar sort-tab-last-active-buffer nil)
+
+(defvar sort-tab-pin-keys '("①" "②" "③" "④" "⑤" "⑥" "⑦" "⑧" "⑨")
+  "Key used for pin tab.")
+
+(defvar sort-tab-ace-1-key-seqs nil
+  "List of 1-key sequences.")
+
+(defvar sort-tab-ace-2-key-seqs nil
+  "List of 2-key sequences.")
+
+(defvar sort-tab-ace-strs nil)
 
 (defun sort-tab-get-buffer ()
   (get-buffer-create sort-tab-buffer-name))
@@ -390,9 +422,9 @@
 (defun sort-tab-get-tab-name (buf current-buffer &optional buffer-index)
   (propertize
    (format " %s%s "
-           (if (or (not sort-tab-show-index-number) (not buffer-index) (> buffer-index 8))
+           (if (or (not sort-tab-ace-state) (not buffer-index) (> buffer-index (length sort-tab-ace-strs)))
                ""
-             (let ((show-numbers '("①" "②" "③" "④" "⑤" "⑥" "⑦" "⑧" "⑨")))
+             (let ((show-numbers sort-tab-ace-strs))
                (concat (nth buffer-index show-numbers) " ")))
            (let ((bufname (buffer-name buf))
                  (ellipsis "..."))
@@ -454,6 +486,71 @@
 (defun sort-tab-select-last-tab ()
   (interactive)
   (switch-to-buffer (sort-tab-get-last-buffer)))
+
+(defun sort-tab-build-ace-strs (len key-number seqs)
+  "Build strings for `sort-tab-ace-jump'.
+LEN is the number of strings, should be the number of current visible
+tabs. NKEYS should be 1 or 2."
+  (let ((i 0)
+        (str nil))
+    (when (>= key-number 3)
+      (error "NKEYS should be 1 or 2"))
+    (while (< i len)
+      (push (apply #'string (elt seqs i)) str)
+      (setq i (1+ i)))
+    (nreverse str)))
+
+(defun sort-tab-ace-jump ()
+  "Jump to a visible tab."
+  (interactive)
+  (catch 'quit
+    (let* ((visible-tabs-length (length sort-tab-visible-buffers))
+           done-flag
+           (lower-bound 0)
+           (upper-bound visible-tabs-length)
+           (ace-keys (length sort-tab-ace-keys))
+           (key-number (cond
+                        ((<= visible-tabs-length ace-keys) 1)
+                        ((<= visible-tabs-length (* ace-keys ace-keys)) 2)
+                        (t (error "Too many visible tabs. Put more keys into `sort-tab-ace-keys'"))))
+           (visible-seqs
+            (cl-subseq
+             (symbol-value
+              (intern
+               (concat "sort-tab-ace-" (number-to-string key-number) "-key-seqs")))
+             0 visible-tabs-length))
+           (ace-strs (sort-tab-build-ace-strs visible-tabs-length key-number visible-seqs)))
+      (setq sort-tab-ace-strs ace-strs)
+      (setq sort-tab-ace-state t)
+      (sort-tab-update-list)
+      (dotimes (i key-number)
+        (while (not done-flag)
+          (let ((char (with-local-quit (read-key (format "Tab Ace Jump (%d):" (1+ i))))))
+            (if (not (member char sort-tab-ace-quit-keys))
+                (let ((current-chars (mapcar #'car visible-seqs)))
+                  (when (member char current-chars)
+                    (setq done-flag t)
+                    (setq lower-bound (cl-position char current-chars))
+                    (setq upper-bound (1- (- visible-tabs-length (cl-position char (nreverse current-chars)))))
+                    (dotimes (lower-index lower-bound)
+                      (setcar (nthcdr lower-index visible-seqs) nil))
+                    (setq upper-index (1+ upper-bound))
+                    (while (< upper-index visible-tabs-length)
+                      (setcar (nthcdr upper-index visible-seqs) nil)
+                      (setq upper-index (1+ upper-index)))
+                    (setq upper-index 0)
+                    ))
+              ;; Quit when user press Ctrl + g.
+              (setq sort-tab-ace-state nil)
+              (sort-tab-update-list)
+              (throw 'quit nil))))
+        (setq done-flag nil)
+        (setq visible-seqs (mapcar #'cdr visible-seqs))
+        (setq sort-tab-ace-strs (sort-tab-build-ace-strs visible-tabs-length key-number visible-seqs))
+        (sort-tab-update-list))
+      (setq sort-tab-ace-state nil)
+      (sort-tab-update-list)
+      (sort-tab-select-visible-nth-tab (1+ lower-bound)))))
 
 (defun sort-tab-close-current-tab-and-select-previous ()
   (interactive)
