@@ -303,7 +303,7 @@
           (buf2-index (or (cl-position buf2 sort-tab-visible-buffers :test #'eq) -1)))
       ;; Do not swapped tab if two tags are adjacent and current command is next or prev tab.
       (if (and (<= (abs (- buf1-index buf2-index)) 1)
-               (member this-command '(sort-tab-select-next-tab sort-tab-select-prev-tab)))
+               (member this-command '(sort-tab-select-next-tab sort-tab-select-prev-tab sort-tab-ace-jump)))
           (< buf1-index buf2-index)
 
         ;; Otherwise, sort by frequency of tab.
