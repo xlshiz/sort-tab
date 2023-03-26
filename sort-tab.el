@@ -320,6 +320,7 @@
         )))
 
 (defun sort-tab-buffer-need-hide-p (buf)
+  "If non-nil, `BUF' need sort."
   (let* ((name (buffer-name buf)))
     (or
      (cl-some (lambda (prefix) (string-prefix-p prefix name)) '("*" " *" "COMMIT_EDITMSG"))
@@ -334,12 +335,15 @@
    (not (sort-tab-buffer-need-hide-p current-buffer))
    ))
 
-(defun sort-tab-is-hidden-buffer-p (buf)
+(defun sort-tab-if-show-tab-p (buf)
+  "If non-nil, `BUF' need hidden."
   (let* ((name (buffer-name buf)))
     (and
      (sort-tab-buffer-need-hide-p buf)
      (not (window-minibuffer-p))
-     (not (cl-some (lambda (prefix) (string-prefix-p prefix name)) '(" *eldoc" " *snails" "*Help" "*Flycheck" "COMMIT_EDITMSG" " *rime" "*color-rg*")))
+     (not (cl-some (lambda (prefix) (string-prefix-p prefix name))
+                   '(" *eldoc" " *snails" "*Help" "*Flycheck" "COMMIT_EDITMSG" " *rime" "*color-rg*"
+                     "*doom:vterm-popup:main*")))
      (not (string-equal sort-tab-buffer-name name))
      (not (sort-tab-is-magit-buffer-p buf))
      )))
@@ -388,7 +392,7 @@
              (buffer-index -1))
         (sort-tab-update-tabs
          ;; Show hide buffer at left when current buffer is match hidden rule.
-         (when (sort-tab-is-hidden-buffer-p current-buffer)
+         (when (sort-tab-if-show-tab-p current-buffer)
            (insert (sort-tab-get-tab-name current-buffer current-buffer))
            (insert sort-tab-propertized-separator))
 
@@ -421,20 +425,20 @@
 
 (defun sort-tab-get-tab-name (buf current-buffer &optional buffer-index)
   (propertize
-   (format " %s%s "
+   (format "%s%s"
            (if (or (not sort-tab-ace-state) (not buffer-index) (> buffer-index (length sort-tab-ace-strs)))
-               ""
+               "  "
              (let ((show-numbers sort-tab-ace-strs))
                (concat (nth buffer-index show-numbers) " ")))
-           (let ((bufname (buffer-name buf))
-                 (ellipsis "..."))
+           (let* ((bufname (buffer-name buf))
+                  (ellipsis "..."))
              ;; We need remove space in web page title.
              (when (sort-tab-is-eaf-browser-buffer-p buf)
                (setq bufname (replace-regexp-in-string "\\s-" "" bufname)))
 
              (if (> (length bufname) sort-tab-name-max-length)
                  (format "%s%s" (substring bufname 0 (- sort-tab-name-max-length (length ellipsis))) ellipsis)
-               bufname)))
+               (format "%s " bufname))))
    'face
    (if (eq buf current-buffer)
        'sort-tab-current-tab-face
