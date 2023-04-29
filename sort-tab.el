@@ -161,6 +161,10 @@
 
 (defvar sort-tab-ace-strs nil)
 
+(defvar sort-tab-hide-buffers '("*" " *"))
+
+(defvar sort-tab-hide-tabs '(" *eldoc" "*Help" "*Flycheck"))
+
 (defun sort-tab-get-buffer ()
   (get-buffer-create sort-tab-buffer-name))
 
@@ -323,7 +327,7 @@
   "If non-nil, `BUF' need sort."
   (let* ((name (buffer-name buf)))
     (or
-     (cl-some (lambda (prefix) (string-prefix-p prefix name)) '("*" " *" "COMMIT_EDITMSG"))
+     (cl-some (lambda (prefix) (string-prefix-p prefix name)) sort-tab-hide-buffers)
      (eq (aref name 0) ?\s)
      (sort-tab-is-magit-buffer-p buf)
      )))
@@ -341,9 +345,7 @@
     (and
      (sort-tab-buffer-need-hide-p buf)
      (not (window-minibuffer-p))
-     (not (cl-some (lambda (prefix) (string-prefix-p prefix name))
-                   '(" *eldoc" " *snails" "*Help" "*Flycheck" "COMMIT_EDITMSG" " *rime" "*color-rg*"
-                     "*doom:vterm-popup:main*")))
+     (not (cl-some (lambda (prefix) (string-prefix-p prefix name)) sort-tab-hide-tabs))
      (not (string-equal sort-tab-buffer-name name))
      (not (sort-tab-is-magit-buffer-p buf))
      )))
