@@ -83,7 +83,7 @@
   :type '(choice (const :tag "Left" left)
                  (const :tag "Center" center)))
 
-(defcustom sort-tab-ace-keys '(?a ?s ?d ?f ?g)
+(defcustom sort-tab-ace-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l)
   "Key used for ace tab."
   :group 'sort-tab
   :set #'(lambda (symbol value)
@@ -123,6 +123,11 @@
     (t
      :foreground "#665c54" :bold t))
   "Face for separator.")
+
+(defface sort-tab-ace-keys-face
+  '((t
+     :inherit transient-red :bold t :height 1.0))
+  "Face for ace keys.")
 
 (defconst sort-tab-propertized-separator
   (propertize sort-tab-separator 'face 'sort-tab-separator-face))
@@ -406,6 +411,10 @@
            ;; Insert tab.
            (setq buffer-index (+ buffer-index 1))
            (setq tab (sort-tab-get-tab-name buf current-buffer buffer-index))
+           (if (or (not sort-tab-ace-state) (> buffer-index (length sort-tab-ace-strs)))
+               (insert "  ")
+             (let ((show-numbers sort-tab-ace-strs))
+               (insert (propertize (format "%-2s" (nth buffer-index show-numbers)) 'face 'sort-tab-ace-keys-face))))
            (insert tab)
            (insert sort-tab-propertized-separator)
 
@@ -427,11 +436,7 @@
 
 (defun sort-tab-get-tab-name (buf current-buffer &optional buffer-index)
   (propertize
-   (format "%s%s"
-           (if (or (not sort-tab-ace-state) (not buffer-index) (> buffer-index (length sort-tab-ace-strs)))
-               "  "
-             (let ((show-numbers sort-tab-ace-strs))
-               (concat (nth buffer-index show-numbers) " ")))
+   (format "%s"
            (let* ((bufname (buffer-name buf))
                   (ellipsis "..."))
              ;; We need remove space in web page title.
